@@ -6,7 +6,6 @@ ADC = 0b000111
 # 0 <= d,r <= 31, is just between what register we do it
 ADD = 0b000011
 
-
 # 10010110KKddKKKK
 # d \in {24, 26, 28, 30}, 0 <= K <= 63
 ADIW = 0b10010110
@@ -49,8 +48,8 @@ BRVC = 0b111101
 # 111100kkkkkkksss
 # 0 <= 7 -64 <= k <= +63
 # BRBS is sss and BRCS is 000, BREQ is 001, BRHS is 101, BRIE is 1111, BRLO is 000, BRLT is 100, BRMI is 010, BRTS is 110, 011
-BRBS= 0b111100
-BRCS= 0b111100
+BRBS = 0b111100
+BRCS = 0b111100
 BREQ = 0b111100
 BRHS = 0b111100
 BRIE = 0b111100
@@ -110,13 +109,13 @@ DES = 0b10010100
 EICALL = 0b1001010100011001
 EIJMP = 0b1001010000011001
 
-# ELPM None, R0 implied 
+# ELPM None, R0 implied
 ELPM_0 = 0b1001010111011000
 # 1001 000d dddd 0110
 # ELPM Rd, Z
 ELPM_1 = 0b1001000
 # 1001 000d dddd 0111
-# ELPM Rd, Z+ 
+# ELPM Rd, Z+
 ELPM_2 = 0b1001000
 
 # 0010 01dd dddd dddd
@@ -165,17 +164,17 @@ LD_X_1_HIGH = 0b1101
 LD_X_2_HIGH = 0b1110
 
 
-LD_Y_0_LOW  = 0b1000000
+LD_Y_0_LOW = 0b1000000
 LD_Y_0_HIGH = 0b1000
-LD_Y_1_LOW  = 0b1001000
+LD_Y_1_LOW = 0b1001000
 LD_Y_1_0_HIGH = 0b1101
 LD_Y_1_1_HIGH = 0b1110
 # 10q0 qq0d dddd 1qqq
 LD_Y_2 = 0b10
 
-LD_Z_0_LOW  = 0b1000000
+LD_Z_0_LOW = 0b1000000
 LD_Z_0_HIGH = 0b0000
-LD_Z_1_LOW  = 0b1001000
+LD_Z_1_LOW = 0b1001000
 LD_Z_1_0_HIGH = 0b1001
 LD_Z_1_1_HIGH = 0b0010
 # 10q0 qq0d dddd 0qqq
@@ -225,7 +224,7 @@ NOP = 0b0000_0000_0000_0000
 OR = 0b001010
 
 # 0110 KKKK dddd KKKK
-ORI = 0b0110 
+ORI = 0b0110
 
 # 1011 1AAr rrrr AAAA
 OUT = 0b10111
@@ -238,9 +237,9 @@ POP = 0b1001000
 PUSH = 0b1001001
 
 # 1101 kkkk kkkk kkkk
-RCALL = 0b1101 
+RCALL = 0b1101
 
-RET  = 0b1001010100001000
+RET = 0b1001010100001000
 RETI = 0b1001010100011000
 # 1100 kkkk kkkk kkkk
 RJMP = 0b1100
@@ -304,7 +303,7 @@ ST_Y_LOW_0 = 0b1000_001
 ST_Y_LOW_1_0 = 0b1001_001
 ST_Y_HIGH_1_0 = 0b1001
 ST_Y_HIGH_1_1 = 0b1010
-#10q0 qq1r rrrr 1qqq
+# 10q0 qq1r rrrr 1qqq
 ST_Y_LOW_2_0 = 0b10
 
 # 1000 001r rrrr 0000
@@ -342,10 +341,32 @@ XCH = 0b1001_001
 BREAK = 0b1001010110011000
 
 
+def match_byte(b0, b1) -> bool:
+    return b0 & b1 == min(b0, b1)
 
+
+def parse_ldi(f, idx) -> int:
+    LDI = 0b1110
+    # 1110 KKKK dddd KKKK
+    if not match_byte(LDI, f[idx]):
+        return -1
+    return 1
+    ...
+
+
+parsing_funcs = [parse_ldi]
 
 
 def main() -> int:
+    f = open("./data/listing_001.obj", "rb").read().strip()
+    idx = 0
+    while idx < len(f):
+        for func in parsing_funcs:
+            res: int = int(func(f, idx))
+            if res != -1:
+                idx += res
+                break
+
     return 0
 
 
