@@ -40,3 +40,19 @@ loop3:
   com r16
   cp r16, r17
   cpc r16, r17
+  cpi r16,23
+  cpse r16,r17
+  dec r16
+  inc r16
+  eor r16,r17
+  fmul r16,r17
+  fmuls r16,r17
+  fmulsu r16,r17
+  icall 
+  ijmp
+  in r25,$16
+  jmp loop1
+  jmp loop1
+  ld r16, X
+  ld r16, X+
+  ld r16, -X

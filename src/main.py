@@ -51,23 +51,63 @@ def parse_break(f, idx) -> int:
 
 def parse_ldi(f, idx) -> int:
     LDI = 0b1110
-    # 1110 KKKK dddd KKKK
     if not match_low_byte(LDI, f[idx]):
         return 0
     return 1
 
 
-def parse_clr(f, idx) -> int:
-    CLR = 0b00100100
-    mask_clr = 0b11111100
-
-    if f[idx] & mask_clr == CLR:
-        high = f[idx] & 0b11
-        idx += 1
-        reg = (high >> 8) + f[idx]
-        print(f"CLR r{reg}")
-
+def parse_ijmp(f, idx):
+    IJMP_HIGH = 0b1001_0100
+    IJMP_LOW = 0b0000_1001
+    if f[idx] == IJMP_HIGH and f[idx + 1] == IJMP_LOW:
+        print("IJMP")
         return 2
+    return 0
+
+
+def parse_jmp(f, idx):
+    JMP = 0b1001_0100
+    mask = 0b1111_1110
+    if (f[idx] & mask) == JMP:
+        k = (f[idx] & 0b1) << 21
+        idx += 1
+        if (f[idx] & 0b1110) == 0b1100:
+            k |= (f[idx] & 0b1111_0000) << 13
+            k |= (f[idx] & 0b1) << 16
+            idx += 1
+            k |= f[idx] << 8
+            k |= f[idx + 1] << 8
+            print(f"JMP {k}")
+            return 11
+
+    return 0
+
+
+def parse_icall(f, idx):
+    ICALL_HIGH = 0b1001_0101
+    ICALL_LOW = 0b0000_1001
+    if f[idx] == ICALL_HIGH and f[idx + 1] == ICALL_LOW:
+        print("ICALL")
+        return 2
+    return 0
+
+
+def parse_mul(f, idx):
+    MUL = 0b0000_0011
+    if f[idx] == MUL:
+        idx += 1
+        high = f[idx] & 0b1000_0000
+        low = f[idx] & 0b1000
+        d = (f[idx] & 0b0111_0000) >> 4
+        r = f[idx] & 0b111
+        if high == 0 and low != 0:
+            print(f"FMUL r{d+16},r{r+16}")
+        elif high != 0 and low == 0:
+            print(f"FMULS r{d+16},r{r+16}")
+        elif high != 0 and low != 0:
+            print(f"FMULSU r{d+16},r{r+16}")
+        return 2
+
     return 0
 
 
@@ -210,16 +250,26 @@ def parse_bset(f, idx) -> int:
     return 0
 
 
+def parse_cpi(f, idx) -> int:
+    CPI = 0b0011_0000
+    mask = 0b1111_0000
+
+    if (f[idx] & mask) == CPI:
+        K = (f[idx] & 0b1111) << 4
+        idx += 1
+
+        d = (f[idx] & 0b1111_0000) >> 4
+        K |= f[idx] & 0b1111
+        print(f"CPI r{d},{K}")
+        return 2
+    return 0
+
+
 def parse_cpc(f, idx) -> int:
     CPC = 0b0000_0100
     mask = 0b1111_1100
     if f[idx] & mask == CPC:
-        r = (f[idx] & 0b10) << 3
-        d = (f[idx] & 0b1) << 4
-
-        idx += 1
-        d |= (f[idx] & 0b1111_0000) >> 4
-        r |= f[idx] & 0b1111
+        d, r = parse_ops(f, idx)
         print(f"cpc r{d}, r{r}")
         return 2
     return 0
@@ -229,14 +279,30 @@ def parse_cp(f, idx) -> int:
     CP = 0b0001_0100
     mask = 0b1111_1100
     if f[idx] & mask == CP:
-        r = f[idx] & 0b10 << 3
-        d = (f[idx] & 0b1) << 4
-
-        idx += 1
-        d |= (f[idx] & 0b1111_0000) >> 4
-        r |= f[idx] & 0b1111
+        d, r = parse_ops(f, idx)
         print(f"cp r{d}, r{r}")
         return 2
+    return 0
+
+
+def parse_incdec(f, idx) -> int:
+    HIGH = 0b1001_0100
+    mask = 0b1111_1110
+
+    if (f[idx] & mask) == HIGH:
+        d = (f[idx] & 1) << 4
+        idx += 1
+        d |= (f[idx] & 0b11110000) >> 4
+        LOW = f[idx] & 0b1111
+        if LOW == 0b1010:
+            print(f"dec r{d}")
+        elif LOW == 0b0011:
+            print(f"inc r{d}")
+        else:
+            return 0
+
+        return 2
+
     return 0
 
 
@@ -345,11 +411,87 @@ def parse_branch(f, idx) -> int:
     return 0
 
 
+def parse_cpse(f, idx) -> int:
+    CPSE = 0b0001_0000
+    mask = 0b11111100
+    if (f[idx] & mask) == CPSE:
+        d, r = parse_ops(f, idx)
+
+        print(f"cpse r{d}, r{r}")
+        return 2
+    return 0
+
+
+def parse_eor(f, idx) -> int:
+    EOR = 0b0010_0100
+    mask = 0b1111_1100
+    if (f[idx] & mask) == EOR:
+        d, r = parse_ops(f, idx)
+        if d == r:
+            print(f"CLR r{d}")
+        else:
+            print(f"EOR r{d},r{r}")
+        return 2
+    return 0
+
+
+def parse_in(f, idx):
+    IN = 0b1011_0000
+    mask = 0b1111_1000
+
+    if (f[idx] & mask) == IN:
+        A = (f[idx] & 0b110) << 3
+        d = (f[idx] & 0b1) << 4
+        idx += 1
+
+        A |= f[idx] & 0b1111
+        d |= f[idx] >> 4
+        print(f"IN r{d},{A:x}")
+        return 2
+    return 0
+
+
+def parse_ld(f, idx):
+    LDY = 0b1000_0000
+    LD = 0b1001_0000
+    mask = 0b1111_1110
+    if (f[idx] & mask) == LD:
+        d = (f[idx] & 0b1) << 4
+        idx += 1
+        d |= (f[idx] & 0b1111_0000) >> 4
+
+        low = f[idx] & 0b1111
+        if low == 12:
+            print(f"LD r{d}, X")
+        elif low == 13:
+            print(f"LD r{d}, X+")
+        elif low == 14:
+            print(f"LD r{d}, -X")
+        elif low == 9:
+            print(f"LD r{d}, Y+")
+        elif low == 10:
+            print(f"LD r{d}, -Y")
+        else:
+            return 0
+
+        return 2
+    if (f[idx] & mask) == LDY:
+        d = (f[idx] & 0b1) << 4
+        idx += 1
+        d |= (f[idx] & 0b1111_0000) >> 4
+
+        low = f[idx] & 0b1111
+        if low == 8:
+            print("LD r{d}, Y")
+            return 2
+
+    return 0
+
+
 parsing_funcs = [
     parse_bld,
     parse_ldi,
     parse_break,
-    parse_clr,
     parse_adc,
     parse_add,
     parse_adiw,
@@ -363,6 +505,16 @@ parsing_funcs = [
     parse_com,
     parse_cp,
     parse_cpc,
+    parse_cpi,
+    parse_cpse,
+    parse_incdec,
+    parse_eor,
+    parse_mul,
+    parse_icall,
+    parse_ijmp,
+    parse_jmp,
+    parse_in,
+    parse_ld,
 ]
 
 
@@ -391,3 +543,9 @@ def main() -> int:
 
 if __name__ == "__main__":
     exit(main())
+
+# eicall
+# eijmp
+# des
+# lac
+# las
