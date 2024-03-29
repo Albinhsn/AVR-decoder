@@ -351,7 +351,6 @@ def parse_ldi(f, idx) -> int:
     if not match_byte(LDI, f[idx]):
         return -1
     return 1
-    ...
 
 
 parsing_funcs = [parse_ldi]
@@ -359,13 +358,12 @@ parsing_funcs = [parse_ldi]
 
 def main() -> int:
     f = open("./data/listing_001.obj", "rb").read().strip()
-    idx = 0
-    while idx < len(f):
-        for func in parsing_funcs:
-            res: int = int(func(f, idx))
-            if res != -1:
-                idx += res
-                break
+    length = f[3]
+    print(f"length {length} vs {len(f)}")
+    idx = 29
+    while idx < length:
+        print(f[idx], chr(f[idx]))
+        idx += 1
 
     return 0
 
