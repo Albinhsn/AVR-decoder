@@ -1,3 +1,5 @@
+import sys
+
 # 00011rdddddrrrr
 # 0 <= d,r <= 31, is just between what register we do it
 ADC = 0b000111
@@ -464,7 +466,7 @@ def parse_andi(f, idx) -> int:
 
 
 def parse_asr(f, idx) -> int:
-    ASR_LOW = 0b1001010_0
+    ASR_LOW = 0b1001_0100
     ASR_HIGH = 0b0101
     mask = 0b1001010_0
     if f[idx] & mask == ASR_LOW:
@@ -473,6 +475,56 @@ def parse_asr(f, idx) -> int:
         if f[idx] & 0b1111 == ASR_HIGH:
             d |= f[idx] >> 4
             print(f"ASR r{d}")
+            return 2
+
+    return 0
+
+
+def parse_call(f, idx) -> int:
+    CALL = 0b10010100
+    if (f[idx] & CALL) == CALL:
+        k = (f[idx] & 1) << 21
+        idx += 1
+
+        if (f[idx] & 0b1110) == 0b111:
+            k |= (0b1111_0000 & f[idx]) << 12
+            k |= (0b1 & f[idx]) << 16
+            idx += 1
+            k |= f[idx] << 8
+            idx += 1
+            k |= f[idx]
+            print(f"CALL {k}")
+
+            return 4
+
+    return 0
+
+
+def parse_bst(f, idx) -> int:
+    BST = 0b11111010
+    if f[idx] == BST:
+        d = f[idx] & 1 << 4
+        idx += 1
+        if (f[idx] & 0b1000) != 0:
+            d |= f[idx] >> 4
+            b = f[idx] & 0b111
+            print(f"BST r{d},{b}")
+
+            return 2
+
+    return 0
+
+
+def parse_bset(f, idx) -> int:
+    BSET_LOW = 0b1001_0100
+    BSET_HIGH = 0b1000
+    if f[idx] == BSET_LOW:
+        idx += 1
+
+        if f[idx] & 0b1000_0000 == 0 and (f[idx] & 0b1111) == BSET_HIGH:
+            s = (f[idx] & 0b0111_0000) >> 4
+            print(f"BCLR {s}")
+            return 2
 
     return 0
 
@@ -482,30 +534,72 @@ def parse_bclr(f, idx) -> int:
     BCLR_HIGH = 0b1000
     if f[idx] == BCLR_LOW:
         idx += 1
-        print("BCLR ?")
 
-        if f[idx] & 0b1000_0000 != 0 and f[idx] & 0b1111 == BCLR_HIGH:
+        if f[idx] & 0b1000_0000 != 0 and (f[idx] & 0b1111) == BCLR_HIGH:
             s = (f[idx] & 0b0111_0000) >> 4
             print(f"BCLR {s}")
+            return 2
 
     return 0
 
 
 def parse_bld(f, idx) -> int:
     BLD_LOW = 0b1111_1000
-    mask = 0b1111_1000
 
-    print(bin(f[idx]), bin(f[idx] & mask))
-
-    if (f[idx] & mask) == BLD_LOW:
+    if (f[idx] & BLD_LOW) == BLD_LOW:
         d = (f[idx] & 1) << 7
         idx += 1
-        print("GOT")
         if (f[idx] & 0b0000_1000) == 0:
-            d |= (f[idx] & 0b11110000) >> 1
+            d |= (f[idx] & 0b11110000) >> 4
             b = f[idx] & 0b111
             print(f"BLD r{d},{b}")
             return 2
+    return 0
+
+
+def parse_branch(f, idx) -> int:
+    BR0 = 0b1111_0100
+    BR0_TABLE = [
+        "BRCC/BRSH",
+        "BRNE",
+        "BRPL",
+        "BRVC",
+        "BRGE",
+        "BRHC",
+        "BRTC",
+        "BRID",
+    ]
+
+    BR1 = 0b1111_0000
+    BR1_TABLE = [
+        "BRCS/BRLO",
+        "BREQ",
+        "BRMI",
+        "BRVS",
+        "BRLT",
+        "BRHS",
+        "BRTS",
+        "BRIE",
+    ]
+
+    if (f[idx] & BR0) == BR0:
+        k = (f[idx] & 0b11) << 5
+        idx += 1
+
+        s = f[idx] & 0b111
+        k |= (f[idx] & 0b11111000) >> 3
+        # BRCC
+        print(f"{BR0_TABLE[s]} {k}")
+        return 2
+
+    if (f[idx] & BR1) == BR1:
+        k = (f[idx] & 0b11) << 5
+        idx += 1
+        k |= (f[idx] & 0b11111000) >> 3
+
+        s = f[idx] & 0b111
+        print(f"{BR1_TABLE[s]} {k}")
+        return 2
     return 0
 
 
@@ -521,6 +615,7 @@ parsing_funcs = [
     parse_andi,
     parse_asr,
     parse_bclr,
+    parse_branch,
 ]
 
 
