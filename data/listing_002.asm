@@ -23,6 +23,9 @@ loop3:
   brcc loop2
   brbs 4,loop1
   brcs 5,loop3
+  call loop2
+  call loop2
   brlo 5,loop3
   breq 5,loop3
   brge 5,loop3
+
