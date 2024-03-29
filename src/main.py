@@ -58,7 +58,6 @@ def parse_ldi(f, idx) -> int:
 
 
 def parse_clr(f, idx) -> int:
-    # 0b001 001dd dddd dddd
     CLR = 0b00100100
     mask_clr = 0b11111100
 
@@ -156,8 +155,28 @@ def parse_call(f, idx) -> int:
             idx += 1
             k |= f[idx]
             print(f"CALL {k}")
+            # Need to somehow parse an additional 8 bytes?
 
             return 11
+
+    return 0
+
+
+# ToDo wtf :)
+def parse_cbr(f, idx) -> int:
+    return 0
+
+
+def parse_cbi(f, idx) -> int:
+    CBI = 0b1001_1000
+    if f[idx] == CBI:
+        idx += 1
+
+        A = (f[idx] & 0b1111_1000) >> 3
+        b = f[idx] & 0b111
+        print(f"CBI ${A:x},{b}")
+
+        return 2
 
     return 0
 
@@ -183,9 +202,53 @@ def parse_bset(f, idx) -> int:
     if f[idx] == BSET_LOW:
         idx += 1
 
-        if f[idx] & 0b1000_0000 == 0 and (f[idx] & 0b1111) == BSET_HIGH:
+        if (f[idx] & 0b1000_0000) == 0 and (f[idx] & 0b1111) == BSET_HIGH:
             s = (f[idx] & 0b0111_0000) >> 4
-            print(f"BCLR {s}")
+            print(f"BSET {s}")
+            return 2
+
+    return 0
+
+
+def parse_cpc(f, idx) -> int:
+    CPC = 0b0000_0100
+    mask = 0b1111_1100
+    if f[idx] & mask == CPC:
+        r = (f[idx] & 0b10) << 3
+        d = (f[idx] & 0b1) << 4
+
+        idx += 1
+        d |= (f[idx] & 0b1111_0000) >> 4
+        r |= f[idx] & 0b1111
+        print(f"cpc r{d}, r{r}")
+        return 2
+    return 0
+
+
+def parse_cp(f, idx) -> int:
+    CP = 0b0001_0100
+    mask = 0b1111_1100
+    if f[idx] & mask == CP:
+        r = f[idx] & 0b10 << 3
+        d = (f[idx] & 0b1) << 4
+
+        idx += 1
+        d |= (f[idx] & 0b1111_0000) >> 4
+        r |= f[idx] & 0b1111
+        print(f"cp r{d}, r{r}")
+        return 2
+    return 0
+
+
+def parse_com(f, idx) -> int:
+    COM = 0b1001_0100
+
+    if (f[idx] & COM) == COM:
+        d = (f[idx] & 1) << 4
+        idx += 1
+        if (f[idx] & 0b1111) == 0:
+            d |= (f[idx] & 0b1111_0000) >> 4
+            print(f"COM r{d}")
             return 2
 
     return 0
@@ -199,7 +262,24 @@ def parse_bclr(f, idx) -> int:
 
         if f[idx] & 0b1000_0000 != 0 and (f[idx] & 0b1111) == BCLR_HIGH:
             s = (f[idx] & 0b0111_0000) >> 4
-            print(f"BCLR {s}")
+            if s == 0:
+                print("CLC/BCLR 0")
+            if s == 1:
+                print("CLZ/BCLR 1")
+            elif s == 2:
+                print("CLN/BCLR 2")
+            elif s == 3:
+                print("CLV/BCLR 3")
+            elif s == 4:
+                print("CLS/BCLR 4")
+            elif s == 5:
+                print("CLH/BCLR 5")
+            elif s == 6:
+                print("CLT/BCLR 6")
+            elif s == 7:
+                print("CLI/BCLR 7")
+            else:
+                print(f"BCLR {s}")
             return 2
 
     return 0
@@ -279,12 +359,18 @@ parsing_funcs = [
     parse_bclr,
     parse_branch,
     parse_call,
+    parse_cbi,
+    parse_com,
+    parse_cp,
+    parse_cpc,
 ]
 
 
 def main() -> int:
     f = open("./data/listing_002.obj", "rb").read().strip()
-    length = f[3]
+    length = f[2] << 8
+    length |= f[3]
+
     print(f"length {length} vs {len(f)}")
     idx = 29
     while idx < length:

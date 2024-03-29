@@ -28,4 +28,15 @@ loop3:
   brlo 5,loop3
   breq 5,loop3
   brge 5,loop3
-
+  cbi $18, 7
+  clc
+  clh
+  cli
+  cln
+  cls
+  clt
+  clv
+  clz
+  com r16
+  cp r16, r17
+  cpc r16, r17
