@@ -28,7 +28,10 @@ def parse_adc(f, idx) -> int:
 
     if (mask & f[idx]) == ADC:
         d, r = parse_ops(f, idx)
-        print(f"ADC r{d}, r{r}")
+        if d == r:
+            print(f"ROL r{d} / ADC r{d},r{d}")
+        else:
+            print(f"ADC r{d}, r{r}")
         return 2
 
     return 0
@@ -93,8 +96,12 @@ def parse_icall(f, idx):
 
 
 def parse_mul(f, idx):
-    MUL = 0b0000_0011
-    if f[idx] == MUL:
+    FMUL = 0b0000_0011
+    MUL = 0b1001_1100
+    mask_mul = 0b1111_1100
+    MULS = 0b0000_0010
+
+    if f[idx] == FMUL:
         idx += 1
         high = f[idx] & 0b1000_0000
         low = f[idx] & 0b1000
@@ -106,7 +113,36 @@ def parse_mul(f, idx):
             print(f"FMULS r{d+16},r{r+16}")
         elif high != 0 and low != 0:
             print(f"FMULSU r{d+16},r{r+16}")
+        elif high == 0 and low == 0:
+            print(f"MULSU r{d+16},r{r+16}")
+
         return 2
+
+    elif (f[idx] & mask_mul) == MUL:
+        d, r = parse_ops(f, idx)
+        print(f"MUL r{d+16},r{r+16}")
+        return 2
+    elif f[idx] == MULS:
+        idx += 1
+        d = f[idx] >> 4
+        r = f[idx] & 0b1111
+        print(f"MULS r{d+16},r{r+16}")
+        return 2
+
+    return 0
+
+
+def parse_neg(f, idx) -> int:
+    NEG = 0b1001_0100
+    mask = 0b1111_1110
+
+    if (f[idx] & mask) == NEG:
+        d = (f[idx] & 0b1) << 4
+        idx += 1
+        if (f[idx] & 0b1111) == 0b0001:
+            d |= f[idx] >> 4
+            print(f"NEG r{d}")
+            return 2
 
     return 0
 
@@ -117,7 +153,10 @@ def parse_add(f, idx) -> int:
 
     if f[idx] & mask == ADD:
         d, r = parse_ops(f, idx)
-        print(f"ADD r{d}, r{r}")
+        if d == r:
+            print(f"LSL r{d} / ADD r{d}, r{r}")
+        else:
+            print(f"ADD r{d}, r{r}")
         return 2
     return 0
 
@@ -145,7 +184,10 @@ def parse_and(f, idx) -> int:
 
     if f[idx] & mask == AND:
         d, r = parse_ops(f, idx)
-        print(f"AND r{d}, r{r}")
+        if d == r:
+            print(f"TST r{d} /  AND r{d},r{d}")
+        else:
+            print(f"AND r{d}, r{r}")
 
         return 2
     return 0
@@ -308,8 +350,9 @@ def parse_incdec(f, idx) -> int:
 
 def parse_com(f, idx) -> int:
     COM = 0b1001_0100
+    mask = 0b1111_1110
 
-    if (f[idx] & COM) == COM:
+    if (f[idx] & mask) == COM:
         d = (f[idx] & 1) << 4
         idx += 1
         if (f[idx] & 0b1111) == 0:
@@ -353,8 +396,9 @@ def parse_bclr(f, idx) -> int:
 
 def parse_bld(f, idx) -> int:
     BLD_LOW = 0b1111_1000
+    mask = 0b1111_1110
 
-    if (f[idx] & BLD_LOW) == BLD_LOW:
+    if (f[idx] & mask) == BLD_LOW:
         d = (f[idx] & 1) << 7
         idx += 1
         if (f[idx] & 0b0000_1000) == 0:
@@ -367,6 +411,7 @@ def parse_bld(f, idx) -> int:
 
 def parse_branch(f, idx) -> int:
     BR0 = 0b1111_0100
+    mask = 0b1111_1100
     BR0_TABLE = [
         "BRCC/BRSH",
         "BRNE",
@@ -390,7 +435,7 @@ def parse_branch(f, idx) -> int:
         "BRIE",
     ]
 
-    if (f[idx] & BR0) == BR0:
+    if (f[idx] & mask) == BR0:
         k = (f[idx] & 0b11) << 5
         idx += 1
 
@@ -400,7 +445,7 @@ def parse_branch(f, idx) -> int:
         print(f"{BR0_TABLE[s]} {k}")
         return 2
 
-    if (f[idx] & BR1) == BR1:
+    if (f[idx] & mask) == BR1:
         k = (f[idx] & 0b11) << 5
         idx += 1
         k |= (f[idx] & 0b11111000) >> 3
@@ -461,30 +506,590 @@ def parse_ld(f, idx):
         d |= (f[idx] & 0b1111_0000) >> 4
 
         low = f[idx] & 0b1111
+
         if low == 12:
-            print(f"LD r{d}, X")
+            print(f"LD r{d},X")
         elif low == 13:
-            print(f"LD r{d}, X+")
+            print(f"LD r{d},X+")
         elif low == 14:
-            print(f"LD r{d}, -X")
+            print(f"LD r{d},-X")
         elif low == 9:
-            print(f"LD r{d}, Y+")
+            print(f"LD r{d},Y+")
         elif low == 10:
-            print(f"LD r{d}, -Y")
+            print(f"LD r{d},-Y")
+        elif low == 1:
+            print(f"LD r{d},Z+")
+        elif low == 2:
+            print(f"LD r{d},-Z")
         else:
             return 0
 
         return 2
-    if (f[idx] & mask) == LDY:
+    elif (f[idx] & mask) == LDY:
         d = (f[idx] & 0b1) << 4
         idx += 1
         d |= (f[idx] & 0b1111_0000) >> 4
 
         low = f[idx] & 0b1111
-        if low == 8:
-            print("LD r{d}, Y")
+        if low == 0:
+            print(f"LD r{d}, Z")
+        elif low == 8:
+            print(f"LD r{d}, Y")
+        return 2
+    else:
+        LD_O = 0b1000_0000
+        mask = 0b1101_0010
+
+        if (f[idx] & mask) == LD_O:
+            q = f[idx] & 0b10_0000
+            q |= (f[idx] & 0b1100) << 1
+            d = (f[idx] & 0b1) << 4
+            idx += 1
+            d |= f[idx] & 0b1111_0000
+            q |= f[idx] & 0b111
+
+            if f[idx] & 0b1000 != 0:
+                print(f"LD r{d},Y+{q}")
+            else:
+                print(f"LD r{d},Z+{q}")
             return 2
 
+    return 0
+
+
+def parse_lpm(f, idx) -> int:
+    LPM = 0b1001_0000
+    mask = 0b1111_1110
+    if f[idx] == 0b1001_0101 and f[idx + 1] == 0b1100_1000:
+        print("LPM")
+        return 2
+    elif (f[idx] & mask) == LPM:
+        d = (f[idx] & 0b1) << 4
+        idx += 1
+        d |= (f[idx] & 0b1111_0000) >> 4
+        if (f[idx] & 0b1111) == 0b0100:
+            print(f"LPM r{d},Z")
+        elif (f[idx] & 0b1111) == 0b0101:
+            print(f"LPM r{d},Z+")
+        else:
+            return 0
+        return 2
+
+    return 0
+
+
+def parse_lds(f, idx) -> int:
+    LDS = 0b1001_0000
+    mask = 0b1111_1110
+    LDS_16 = 0b1010_0000
+    mask_16 = 0b1111_1000
+
+    if (f[idx] & mask) == LDS:
+        d = (f[idx] & 0b1) << 4
+        idx += 1
+        if (f[idx] & 0b1111) == 0:
+            d |= (f[idx] & 0b1111_000) >> 4
+            idx += 1
+            k = (f[idx] << 8) | f[idx + 1]
+            print(f"LDS r{d},{k}")
+            return 11
+    elif (f[idx] & mask_16) == LDS_16:
+        k = (f[idx] & 0b111) << 4
+        idx += 1
+        k |= f[idx] & 0b1111
+        d = (f[idx] & 0b1111_0000) >> 4
+        print(f"LDS r{d},${k:x}")
+        return 2
+    return 0
+
+
+def parse_lsr(f, idx) -> int:
+    LSR = 0b1001_0100
+    mask = 0b1111_1110
+
+    if (f[idx] & mask) == LSR:
+        d = (f[idx] & 0b1) << 4
+        idx += 1
+        if (f[idx] & 0b1111) == 0b0110:
+            d |= (f[idx] & 0b1111_0000) >> 4
+            print(f"LSR r{d}")
+            return 2
+
+    return 0
+
+
+def parse_mov(f, idx) -> int:
+    MOV = 0b0010_1100
+    mask = 0b1111_1100
+
+    if (f[idx] & mask) == MOV:
+        d, r = parse_ops(f, idx)
+
+        print(f"MOV r{d}, r{r}")
+
+        return 2
+
+    return 0
+
+
+def parse_movw(f, idx) -> int:
+    MOVW = 0b0000_0001
+
+    if f[idx] == MOVW:
+        idx += 1
+        d = f[idx] >> 4
+        r = f[idx] & 0b1111
+
+        print(f"MOVW r{2 * d}, r{2 * r}")
+
+        return 2
+
+    return 0
+
+
+def parse_noop(f, idx) -> int:
+    if f[idx] == 0 and f[idx + 1] == 0:
+        print("NOP")
+        return 2
+
+    return 0
+
+
+def parse_or(f, idx) -> int:
+    OR = 0b0010_1000
+    mask = 0b1111_1100
+
+    if (f[idx] & mask) == OR:
+        d, r = parse_ops(f, idx)
+        print(f"OR r{d},r{r}")
+
+        return 2
+
+    return 0
+
+
+def parse_ori(f, idx) -> int:
+    if (f[idx] >> 4) == 0b0110:
+        K = (f[idx] & 0b1111) << 4
+        idx += 1
+        K |= f[idx] & 0b1111
+        d = f[idx] >> 4
+
+        print(f"ORI r{d},{K} / SBR r{d},{K}")
+        return 2
+    return 0
+
+
+def parse_out(f, idx) -> int:
+    OUT = 0b1011_1000
+    mask = 0b1111_1000
+
+    if (f[idx] & mask) == OUT:
+        A = (f[idx] & 0b110) << 3
+        r = (f[idx] & 0b1) << 4
+        idx += 1
+
+        r |= f[idx] >> 4
+        A |= f[idx] & 0b1111
+        print(f"OUT ${A:x},r{r}")
+        return 2
+    return 0
+
+
+def parse_pop(f, idx) -> int:
+    POP = 0b1001_0000
+    mask = 0b1111_1110
+
+    if (f[idx] & mask) == POP:
+        d = (f[idx] & 0b1) << 4
+        idx += 1
+        if f[idx] & 0b1111 == 0b1111:
+            d |= f[idx] >> 4
+            print(f"POP r{d}")
+            return 2
+
+    return 0
+
+
+def parse_push(f, idx) -> int:
+    PUSH = 0b1001_0010
+    mask = 0b1111_1110
+
+    if (f[idx] & mask) == PUSH:
+        d = (f[idx] & 0b1) << 4
+        idx += 1
+        if f[idx] & 0b1111 == 0b1111:
+            d |= f[idx] >> 4
+            print(f"PUSH r{d}")
+            return 2
+
+    return 0
+
+
+def parse_rcall(f, idx) -> int:
+    RCALL = 0b1101
+
+    if f[idx] >> 4 == RCALL:
+        k = (f[idx] & 0b1111) << 8
+        k |= f[idx + 1]
+        print(f"RCALL {k}")
+
+        return 2
+    return 0
+
+
+def parse_ret(f, idx) -> int:
+    if f[idx] == 0b1001_0101 and f[idx + 1] == 0b0000_1000:
+        print("RET")
+        return 2
+    return 0
+
+
+def parse_reti(f, idx) -> int:
+    if f[idx] == 0b1001_0101 and f[idx + 1] == 0b0001_1000:
+        print("RETI")
+        return 2
+    return 0
+
+
+def parse_rjmp(f, idx) -> int:
+    if f[idx] >> 4 == 0b1100:
+        k = ((f[idx] & 0b1111) << 8) | f[idx + 1]
+        print(f"RJMP {k}")
+        return 2
+
+    return 0
+
+
+def parse_ror(f, idx) -> int:
+    ROR = 0b1001_0100
+    mask = 0b1111_1110
+
+    if (f[idx] & mask) == ROR:
+        d = (f[idx] & 0b1) << 4
+        idx += 1
+        d |= f[idx] >> 4
+        if f[idx] & 0b1111 == 0b0111:
+            print(f"ROR r{d}")
+            return 2
+
+    return 0
+
+
+def parse_sbc(f, idx) -> int:
+    SBC = 0b0000_1000
+    mask = 0b1111_1100
+
+    if (f[idx] & mask) == SBC:
+        d, r = parse_ops(f, idx)
+        print(f"SBC r{d},r{r}")
+        return 2
+    return 0
+
+
+def parse_sbci(f, idx) -> int:
+    if (f[idx] >> 4) == 0b0100:
+        K = (f[idx] & 0b1111) << 4
+        idx += 1
+        d = f[idx] >> 4
+        K |= f[idx] & 0b1111
+        print(f"SBCI r{d+16},K")
+        return 2
+
+    return 0
+
+
+def parse_sbi(f, idx) -> int:
+    if f[idx] == 0b1001_1010:
+        idx += 1
+        A = f[idx] >> 3
+        b = f[idx] & 0b111
+        print(f"SBI ${A:x},{b}")
+        return 2
+    return 0
+
+
+def parse_sbic(f, idx) -> int:
+    if f[idx] == 0b1001_1001:
+        idx += 1
+        A = f[idx] >> 3
+        b = f[idx] & 0b111
+        print(f"SBIC ${A:x},{b}")
+
+        return 2
+    return 0
+
+
+def parse_sbis(f, idx) -> int:
+    if f[idx] == 0b1001_1011:
+        idx += 1
+        A = f[idx] >> 3
+        b = f[idx] & 0b111
+        print(f"SBIS ${A:x},{b}")
+
+        return 2
+
+    return 0
+
+
+def parse_sbiw(f, idx) -> int:
+    TABLE = [24, 26, 28, 30]
+    if f[idx] == 0b1001_0111:
+        idx += 1
+        K = (f[idx] >> 6) << 4
+        K |= f[idx] & 0b1111
+        d = f[idx] >> 4
+        print(f"SBIW r{TABLE[d] + 1}:r{TABLE[d]},{K}")
+        return 2
+
+    return 0
+
+
+def parse_sbrs(f, idx) -> int:
+    SBRS = 0b1111_1110
+    mask = 0b1111_1110
+
+    if (f[idx] & mask) == SBRS:
+        r = (f[idx] & 0b1) << 4
+        idx += 1
+        if (f[idx] & 0b1000) == 0:
+            r |= f[idx] >> 4
+            b = f[idx] & 0b111
+            print(f"SBRS r{r},{b}")
+            return 2
+
+    return 0
+
+
+def parse_sbrc(f, idx) -> int:
+    SBRC = 0b1111_1100
+    mask = 0b1111_1110
+
+    if (f[idx] & mask) == SBRC:
+        r = (f[idx] & 0b1) << 4
+        idx += 1
+        if (f[idx] & 0b1000) == 0:
+            r |= f[idx] >> 4
+            b = f[idx] & 0b111
+            print(f"SBRC r{r},{b}")
+            return 2
+
+    return 0
+
+
+def parse_sec(f, idx) -> int:
+    if f[idx] == 0b1001_0100 and f[idx + 1] == 0b0000_1000:
+        print("SEC")
+        return 2
+    return 0
+
+
+def parse_seh(f, idx) -> int:
+    if f[idx] == 0b1001_0100 and f[idx + 1] == 0b0101_1000:
+        print("SEH")
+        return 2
+    return 0
+
+
+def parse_sei(f, idx) -> int:
+    if f[idx] == 0b1001_0100 and f[idx + 1] == 0b0111_1000:
+        print("SEI")
+        return 2
+    return 0
+
+
+def parse_sen(f, idx) -> int:
+    if f[idx] == 0b1001_0100 and f[idx + 1] == 0b0010_1000:
+        print("SEN")
+        return 2
+    return 0
+
+
+def parse_ser(f, idx) -> int:
+    if f[idx] == 0b1110_1111:
+        idx += 1
+        if (f[idx] & 0b1111) == 0b1111:
+            d = f[idx] >> 4
+            print(f"SER r{d+16}")
+            return 2
+    return 0
+
+
+def parse_ses(f, idx) -> int:
+    if f[idx] == 0b1001_0100 and f[idx + 1] == 0b0100_1000:
+        print("SES")
+        return 2
+    return 0
+
+
+def parse_set(f, idx) -> int:
+    if f[idx] == 0b1001_0100 and f[idx + 1] == 0b0110_1000:
+        print("SET")
+        return 2
+    return 0
+
+
+def parse_sev(f, idx) -> int:
+    if f[idx] == 0b1001_0100 and f[idx + 1] == 0b0011_1000:
+        print("SEV")
+        return 2
+    return 0
+
+
+def parse_sleep(f, idx) -> int:
+    if f[idx] == 0b1001_0101 and f[idx + 1] == 0b1000_1000:
+        print("SLEEP")
+        return 2
+    return 0
+
+
+def parse_sez(f, idx) -> int:
+    if f[idx] == 0b1001_0100 and f[idx + 1] == 0b0001_1000:
+        print("SEZ")
+        return 2
+    return 0
+
+
+def parse_spm(f, idx) -> int:
+    if f[idx] == 0b1001_0101 and f[idx + 1] == 0b1110_1000:
+        print("SPM / SPM Z+")
+    elif f[idx] == 0b1001_0101 and f[idx + 1] == 0b1111_1000:
+        print("SPM Z+")
+    else:
+        return 0
+    return 2
+
+
+def parse_st(f, idx) -> int:
+    offset = 0b1000_0010
+    mask = 0b1101_0010
+    if f[idx] >> 1 == 0b1000_001:
+        r = (f[idx] & 0b1) << 4
+        idx += 1
+        r |= f[idx] >> 4
+        x = f[idx] & 0b1111
+        if x == 0b1000:
+            print(f"ST Y,r{r}")
+            return 2
+        elif x == 0:
+            print(f"ST Z,r{r}")
+            return 2
+        idx -= 1
+
+    if f[idx] >> 1 == 0b1001_001:
+        r = (f[idx] & 0b1) << 4
+        idx += 1
+        r |= f[idx] >> 4
+
+        x = f[idx] & 0b1111
+        if x == 0b1100:
+            print(f"ST X,r{r}")
+            return 2
+        elif x == 0b1101:
+            print(f"ST X+,r{r}")
+            return 2
+        elif x == 0b1110:
+            print(f"ST -X,r{r}")
+            return 2
+        elif x == 0b1001:
+            print(f"ST Y+,r{r}")
+            return 2
+        elif x == 0b1010:
+            print(f"ST Y-,r{r}")
+            return 2
+        elif x == 0b1:
+            print(f"ST Z+,r{r}")
+            return 2
+        elif x == 0b10:
+            print(f"ST -Z,r{r}")
+            return 2
+        idx -= 1
+
+    if (f[idx] & mask) == offset:
+        q = ((f[idx] >> 5) & 0b1) << 5
+        q |= ((f[idx] >> 2) & 0b11) << 3
+
+        r = (f[idx] & 0b1) << 4
+
+        idx += 1
+        r |= f[idx] >> 4
+        q |= f[idx] & 0b111
+        if f[idx] & 0b1000 == 0:
+            print(f"STD Z+{q},r{r}")
+        else:
+            print(f"STD Y+{q},r{r}")
+
+        return 2
+    return 0
+
+
+def parse_sts(f, idx) -> int:
+    STS = 0b1001_0010
+    STS_16 = 0b1010_1000
+    mask_16 = 0b1111_1000
+    mask = 0b1111_1110
+
+    if (f[idx] & mask) == STS:
+        d = f[idx] & 0b1
+        idx += 1
+        d |= f[idx] >> 4
+        if (f[idx] & 0b1111) == 0:
+            idx += 1
+            k = (f[idx] << 8) | f[idx + 1]
+            print(f"STS {k},r{d}")
+
+            return 11
+    elif (f[idx] & mask) == STS_16:
+        k = (f[idx] & 0b111) << 4
+        idx += 1
+        d = f[idx] >> 4
+        k |= f[idx] & 0b1111
+        print(f"STS {k},r{d}")
+        return 2
+    return 0
+
+
+def parse_subi(f, idx) -> int:
+    SUBI = 0b0101_0000
+    mask = 0b1111_0000
+    if (f[idx] & mask) == SUBI:
+        K = (f[idx] & 0b1111) << 4
+        idx += 1
+        d = f[idx] >> 4
+        K |= f[idx] & 0b1111
+        print(f"SUBI r{d+16},{K}")
+        return 2
+    return 0
+
+
+def parse_sub(f, idx) -> int:
+    SUB = 0b0001_1000
+    mask = 0b1111_1100
+    if (f[idx] & mask) == SUB:
+        d, r = parse_ops(f, idx)
+        print(f"SUB r{d},r{r}")
+        return 2
+    return 0
+
+
+def parse_swap(f, idx) -> int:
+    SWAP = 0b1001_0100
+    mask = 0b1111_1110
+    if (f[idx] & mask) == SWAP:
+        d = (f[idx] & 0b1) << 4
+        idx += 1
+        d |= f[idx] >> 4
+
+        if f[idx] & 0b1111 == 0b0010:
+            print(f"SWAP r{d}")
+            return 2
+    return 0
+
+
+def parse_wdr(f, idx) -> int:
+    if f[idx] == 0b1001_0101 and f[idx + 1] == 0b1010_1000:
+        print("WDR")
+        return 2
     return 0
 
 
@@ -515,11 +1120,50 @@ parsing_funcs = [
     parse_jmp,
     parse_in,
     parse_ld,
+    parse_lds,
+    parse_lpm,
+    parse_lsr,
+    parse_mov,
+    parse_movw,
+    parse_neg,
+    parse_noop,
+    parse_or,
+    parse_ori,
+    parse_out,
+    parse_pop,
+    parse_push,
+    parse_rcall,
+    parse_ret,
+    parse_reti,
+    parse_rjmp,
+    parse_ror,
+    parse_sbc,
+    parse_sbci,
+    parse_sbi,
+    parse_sbic,
+    parse_sbis,
+    parse_sbiw,
+    parse_sbrc,
+    parse_sbrs,
+    parse_sec,
+    parse_seh,
+    parse_ser,
+    parse_ses,
+    parse_set,
+    parse_sleep,
+    parse_spm,
+    parse_st,
+    parse_sts,
+    parse_sub,
+    parse_subi,
+    parse_swap,
+    parse_wdr,
 ]
 
 
 def main() -> int:
     f = open("./data/listing_002.obj", "rb").read().strip()
+    print(f[0:5])
     length = f[2] << 8
     length |= f[3]
 
