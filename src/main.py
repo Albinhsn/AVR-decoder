@@ -338,31 +338,175 @@ WDR = 0b1001_0101_1010_1000
 XCH = 0b1001_001
 
 
-BREAK = 0b1001010110011000
+BREAK = 0b10010101_10011000
 
 
-def match_byte(b0, b1) -> bool:
-    return b0 & b1 == min(b0, b1)
+def match_low_byte(b0, b1) -> bool:
+    b0 &= 0b11111111
+    b1 &= 0b11111111
+    return b0 == b1
+
+
+def parse_ops(f, idx):
+    d = (f[idx] & 0b1) << 4
+    r = (f[idx] & 0b10) << 3
+
+    idx += 1
+    d = d | ((f[idx] & 0b11110000) >> 4)
+    r = r | (f[idx] & 0b1111)
+
+    return d, r
+
+
+def parse_adc(f, idx) -> int:
+    ADC = 0b00011100
+    mask = 0b11111100
+
+    if (mask & f[idx]) == ADC:
+        d, r = parse_ops(f, idx)
+        print(f"ADC r{d}, r{r}")
+        return 2
+
+    return 0
+
+
+def parse_break(f, idx) -> int:
+    size = 2
+    BREAK = 0b10010101_10011000
+
+    # 1110 KKKK dddd KKKK
+    while size != 0 and match_low_byte(BREAK >> ((size - 1) * 8), f[idx]):
+        size -= 1
+        idx += 1
+
+    if size == 0:
+        print("BREAK")
+        return 2
+    return 0
 
 
 def parse_ldi(f, idx) -> int:
     LDI = 0b1110
     # 1110 KKKK dddd KKKK
-    if not match_byte(LDI, f[idx]):
-        return -1
+    if not match_low_byte(LDI, f[idx]):
+        return 0
     return 1
 
 
-parsing_funcs = [parse_ldi]
+def parse_clr(f, idx) -> int:
+    # 0b001 001dd dddd dddd
+    CLR = 0b00100100
+    mask_clr = 0b11111100
+
+    if f[idx] & mask_clr == CLR:
+        high = f[idx] & 0b11
+        idx += 1
+        reg = (high >> 8) + f[idx]
+        print(f"CLR r{reg}")
+
+        return 2
+    return 0
+
+
+def parse_add(f, idx) -> int:
+    ADD = 0b000011_00
+    mask = 0b111111_00
+
+    if f[idx] & mask == ADD:
+        d, r = parse_ops(f, idx)
+        print(f"ADD r{d}, r{r}")
+        return 2
+    return 0
+
+
+def parse_adiw(f, idx) -> int:
+    REG_TABLE = [24, 26, 28, 30]
+    ADIW = 0b10010110
+    if f[idx] == ADIW:
+        idx += 1
+        d = (f[idx] & 0b00110000) >> 4
+
+        K = (f[idx] & 0b1100_0000) >> 2
+        K |= f[idx] & 0b1111
+
+        print(f"ADIW r{REG_TABLE[d]}, {K}")
+
+        return 2
+
+    return 0
+
+
+def parse_and(f, idx) -> int:
+    AND = 0b001000_00
+    mask = 0b111111_00
+
+    if f[idx] & mask == AND:
+        d, r = parse_ops(f, idx)
+        print(f"AND r{d}, r{r}")
+
+        return 2
+    return 0
+
+
+def parse_andi(f, idx) -> int:
+    ANDI = 0b0111_0000
+    mask = 0b1111_0000
+
+    if f[idx] & mask == ANDI:
+        K = (f[idx] & 0b1111) << 4
+        idx += 1
+        K |= f[idx] & 0b1111
+        d = 16 + ((f[idx] & 0b11110000) >> 4)
+        print(f"ANDI r{d}, {K}")
+
+        return 2
+    return 0
+
+def parse_asr(f, idx) -> int:
+    ASR_LOW = 0b1001010_0
+    ASR_HIGH = 0b0101
+    mask = 0b1001010_0
+    if f[idx] & mask == ASR_LOW:
+        d = (f[idx] & 0b1) << 4
+        idx += 1
+        if f[idx] & 0b1111 == ASR_HIGH:
+            d |= f[idx] >> 4
+            print(f"ASR r{d}")
+
+
+    return 0
+
+
+
+parsing_funcs = [
+    parse_ldi,
+    parse_break,
+    parse_clr,
+    parse_adc,
+    parse_add,
+    parse_adiw,
+    parse_and,
+    parse_andi,
+    parse_asr,
+]
 
 
 def main() -> int:
-    f = open("./data/listing_001.obj", "rb").read().strip()
+    f = open("./data/listing_002.obj", "rb").read().strip()
     length = f[3]
     print(f"length {length} vs {len(f)}")
     idx = 29
     while idx < length:
-        print(f[idx], chr(f[idx]))
+        flag = False
+        for func in parsing_funcs:
+            count = func(f, idx)
+            if count != 0:
+                idx += count + 6  # 6 for crc?
+                flag = True
+                break
+        if not flag:
+            print(f[idx])
+
         idx += 1
 
     return 0

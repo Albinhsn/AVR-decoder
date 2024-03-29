@@ -2,15 +2,12 @@
 .device ATMega8
 
 start:
+  break
   clr r17
-  inc r16
-  ldi r16, 15
-  inc r16
-  ldi r17, high($3)
-  ldi r16, 15
-  inc r16
-  ldi r17, high($3)
-  ldi r16, 15
-  inc r16
-  ldi r17, high($3)
-  rjmp start
+  adc r16, r17
+  add r16, r17
+  adiw r26, 60
+  and r18, r19
+  andi r18, 50
+  asr r12 
+  asr r30 
