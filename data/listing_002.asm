@@ -11,3 +11,5 @@ start:
   andi r18, 50
   asr r12 
   asr r30 
+  bclr 1
+  bld r1, 4

@@ -462,6 +462,7 @@ def parse_andi(f, idx) -> int:
         return 2
     return 0
 
+
 def parse_asr(f, idx) -> int:
     ASR_LOW = 0b1001010_0
     ASR_HIGH = 0b0101
@@ -473,12 +474,43 @@ def parse_asr(f, idx) -> int:
             d |= f[idx] >> 4
             print(f"ASR r{d}")
 
+    return 0
+
+
+def parse_bclr(f, idx) -> int:
+    BCLR_LOW = 0b1001_0100
+    BCLR_HIGH = 0b1000
+    if f[idx] == BCLR_LOW:
+        idx += 1
+        print("BCLR ?")
+
+        if f[idx] & 0b1000_0000 != 0 and f[idx] & 0b1111 == BCLR_HIGH:
+            s = (f[idx] & 0b0111_0000) >> 4
+            print(f"BCLR {s}")
 
     return 0
 
 
+def parse_bld(f, idx) -> int:
+    BLD_LOW = 0b1111_1000
+    mask = 0b1111_1000
+
+    print(bin(f[idx]), bin(f[idx] & mask))
+
+    if (f[idx] & mask) == BLD_LOW:
+        d = (f[idx] & 1) << 7
+        idx += 1
+        print("GOT")
+        if (f[idx] & 0b0000_1000) == 0:
+            d |= (f[idx] & 0b11110000) >> 1
+            b = f[idx] & 0b111
+            print(f"BLD r{d},{b}")
+            return 2
+    return 0
+
 
 parsing_funcs = [
+    parse_bld,
     parse_ldi,
     parse_break,
     parse_clr,
@@ -488,6 +520,7 @@ parsing_funcs = [
     parse_and,
     parse_andi,
     parse_asr,
+    parse_bclr,
 ]
 
 
