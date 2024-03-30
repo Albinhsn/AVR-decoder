@@ -4,6 +4,7 @@
 start:
   break
   clr r17
+  ldi r16,5
   adc r16, r17
 loop1:
   add r16, r17
